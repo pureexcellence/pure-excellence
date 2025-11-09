@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Contact", href: "/contact" },
   // statisch bestand in /public/tools/action-tracker/index.html
 { label: "Action Tracker", href: "/tools/action-tracker/index.html", external: true },
+{ label: "Team Dashboard", href: "/tools/action-tracker/team", external: true },
 ];
 
 function cx(...parts: Array<string | false | undefined>) {
