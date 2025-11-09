@@ -1,9 +1,14 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
 
-const nextConfig: NextConfig = {
-  // Laat Next/Turbopack weten dat dit de root is
-  turbopack: {
-    root: __dirname,
+  async rewrites() {
+    return [
+      // maak /tools/action-tracker naar index.html
+      { source: '/tools/action-tracker', destination: '/tools/action-tracker/index.html' },
+      // maak /tools/action-tracker/team naar team.html
+      { source: '/tools/action-tracker/team', destination: '/tools/action-tracker/team.html' },
+    ];
   },
 };
 
