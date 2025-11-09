@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Action Tracker — Pure Excellence</title>
+  <meta name="description" content="Razendsnelle action tracker voor teams: plannen, opvolgen, filteren, exporteren. Volledig lokaal via LocalStorage." />
+  <link rel="icon" href="/favicon.ico" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+    @media print {
+      .noprint { display: none !important; }
+    }
+    /* Focus ring helper */
+    .focus-ring:focus { outline: 2px solid rgb(59 130 246); outline-offset: 2px; }
+    /* Sticky header for table */
+    thead th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <!-- Topbar -->
+  <header class="sticky top-0 z-40 border-b bg-white/80 backdrop-blur noprint">
+    <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+      <a href="/" class="text-lg font-semibold tracking-tight">Pure <span class="text-blue-600">Excellence</span></a>
+      <nav class="flex items-center gap-2">
+        <a href="/tools/action-tracker/team.html" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">Team dashboard</a>
+        <a href="/(pe)" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">↩ Terug naar site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <!-- Titel + CTA's -->
+    <section class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold">Action Tracker</h1>
+        <p class="text-sm text-slate-600">Maak, filter en exporteer acties. Alles wordt lokaal bewaard (LocalStorage).</p>
+      </div>
+      <div class="flex flex-wrap gap-2 noprint">
+        <button id="newActionBtn" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Nieuwe actie</button>
+        <button id="exportCsvBtn" class="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50">⭳ Export CSV</button>
+        <label class="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50 cursor-pointer">
+          ⭱ Import CSV <input id="importCsvInput" type="file" accept=".csv,text/csv" class="hidden" />
+        </label>
+        <button id="copyBtn" class="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50">📋 Kopieer selectie</button>
+        <button id="deleteSelectedBtn" class="rounded-lg border px-4 py-2 text-sm text-red-700 hover:bg-red-50">🗑 Verwijder selectie</button>
+        <button id="printBtn" class="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50">🖨 Print</button>
+      </div>
+    </section>
+
+    <!-- KPI tiles -->
+    <section id="kpiWrap" class="grid grid-cols-2 gap-3 md:grid-cols-5"></section>
+
+    <!-- Filters -->
+    <section class="rounded-xl border bg-white p-4 noprint">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-6">
+        <input id="freetext" class="w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="Zoek in titel/beschrijving/tags…"/>
+        <select id="statusFilter" class="w-full rounded-md border px-3 py-2 text-sm focus-ring">
+          <option value="">Status (alle)</option>
+          <option>Open</option>
+          <option>In uitvoering</option>
+          <option>Afgerond</option>
+        </select>
+        <input id="ownerFilter" class="w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="Verantwoordelijke…"/>
+        <select id="prioFilter" class="w-full rounded-md border px-3 py-2 text-sm focus-ring">
+          <option value="">Prioriteit (alle)</option>
+          <option>Laag</option>
+          <option>Midden</option>
+          <option>Hoog</option>
+          <option>Kritiek</option>
+        </select>
+        <input id="fromDate" type="date" class="w-full rounded-md border px-3 py-2 text-sm focus-ring" aria-label="Vanaf deadline"/>
+        <input id="toDate" type="date" class="w-full rounded-md border px-3 py-2 text-sm focus-ring" aria-label="Tot en met deadline"/>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button id="clearFiltersBtn" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">Wis filters</button>
+        <div class="text-sm text-slate-500" id="filterInfo"></div>
+      </div>
+    </section>
+
+    <!-- Tabel -->
+    <div class="overflow-auto rounded-xl border bg-white">
+      <table class="min-w-[1200px] w-full text-sm">
+        <thead class="bg-slate-100">
+          <tr class="text-left text-slate-600">
+            <th class="w-10 px-3 py-2"><input id="checkAll" type="checkbox" aria-label="Selecteer alles"></th>
+            <th class="px-3 py-2 cursor-pointer" data-sort="title">Titel</th>
+            <th class="px-3 py-2 cursor-pointer" data-sort="resp">Verantwoordelijke</th>
+            <th class="px-3 py-2 cursor-pointer" data-sort="status">Status</th>
+            <th class="px-3 py-2 cursor-pointer" data-sort="priority">Prioriteit</th>
+            <th class="px-3 py-2 cursor-pointer" data-sort="deadline">Deadline</th>
+            <th class="px-3 py-2">Tags</th>
+            <th class="px-3 py-2">Acties</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+
+    <!-- Drawer / Modal form -->
+    <dialog id="actionDialog" class="rounded-xl border p-0 backdrop:bg-black/30">
+      <form id="actionForm" class="w-[min(90vw,720px)]">
+        <div class="flex items-center justify-between border-b bg-slate-50 px-4 py-3">
+          <h2 id="dialogTitle" class="text-base font-semibold">Nieuwe actie</h2>
+          <button type="button" class="rounded-md p-1 hover:bg-slate-200" onclick="closeDialog()">✕</button>
+        </div>
+        <div class="grid gap-4 p-4 md:grid-cols-2">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-slate-600">Titel</label>
+            <input required name="title" id="title" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="Wat moet er gebeuren?"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Verantwoordelijke</label>
+            <input name="resp" id="resp" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="Naam…"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Status</label>
+            <select name="status" id="status" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring">
+              <option>Open</option>
+              <option>In uitvoering</option>
+              <option>Afgerond</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Prioriteit</label>
+            <select name="priority" id="priority" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring">
+              <option>Laag</option>
+              <option selected>Midden</option>
+              <option>Hoog</option>
+              <option>Kritiek</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Deadline</label>
+            <input type="date" name="deadline" id="deadline" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring"/>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-slate-600">Tags (komma-gescheiden)</label>
+            <input name="tags" id="tags" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="veiligheid, 5S, project-X"/>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-slate-600">Beschrijving</label>
+            <textarea name="desc" id="desc" rows="4" class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus-ring" placeholder="Context, stappen, links…"></textarea>
+          </div>
+          <input type="hidden" id="actionId"/>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t px-4 py-3">
+          <button type="button" class="rounded-md border px-4 py-2 text-sm hover:bg-slate-50" onclick="closeDialog()">Annuleren</button>
+          <button type="submit" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Bewaren</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+
+  <script>
+    // ------------------- UTIL -------------------
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("nl-BE") : "";
+    const parseTags = (s) => (s || "").split(",").map(t => t.trim()).filter(Boolean);
+    const uid = () => Math.random().toString(36).slice(2,9);
+
+    // ------------------- DATA -------------------
+    const LS_KEY = "actions";
+    let actions = [];
+
+    function load() {
+      try {
+        actions = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+        if (!Array.isArray(actions)) actions = [];
+      } catch { actions = []; }
+      // seed voorbeeld als leeg
+      if (actions.length === 0) {
+        actions = [
+          {id:uid(), title:"Inkomende schadeanalyse", resp:"Bart", status:"Open", priority:"Hoog", deadline:isoOffset(7), tags:["kwaliteit"], desc:"Analyse Q4", createdAt:Date.now(), updatedAt:Date.now()},
+          {id:uid(), title:"Layout optimaliseren zone D", resp:"Sara", status:"In uitvoering", priority:"Midden", deadline:isoOffset(14), tags:["proces","layout"], desc:"Kaizen sessie", createdAt:Date.now(), updatedAt:Date.now()},
+          {id:uid(), title:"Safety round picking", resp:"Omar", status:"Afgerond", priority:"Laag", deadline:isoOffset(-2), tags:["veiligheid"], desc:"Checklist 5 punten", createdAt:Date.now(), updatedAt:Date.now()},
+        ];
+        save();
+      }
+    }
+    function save() {
+      localStorage.setItem(LS_KEY, JSON.stringify(actions));
+    }
+    function isoOffset(days) {
+      const d = new Date(); d.setDate(d.getDate()+days);
+      d.setHours(0,0,0,0);
+      return d.toISOString().slice(0,10);
+    }
+
+    // ------------------- FILTER/SORT STATE -------------------
+    const state = {
+      q: "", status:"", owner:"", prio:"", from:"", to:"", sort: { key:"deadline", dir:"asc" },
+      selection: new Set(),
+    };
+
+    // ------------------- RENDER -------------------
+    function kpi(label, value, tint="text-slate-900") {
+      return `
+        <div class="rounded-lg border bg-white p-4">
+          <div class="text-xs uppercase tracking-wide text-slate-500">${label}</div>
+          <div class="mt-1 text-2xl font-bold ${tint}">${value}</div>
+        </div>`;
+    }
+    function renderKPIs(list) {
+      const total = list.length;
+      const open = list.filter(a => a.status==="Open").length;
+      const doing = list.filter(a => a.status==="In uitvoering").length;
+      const done = list.filter(a => a.status==="Afgerond").length;
+      const overdue = list.filter(a => isOverdue(a)).length;
+      $("#kpiWrap").innerHTML = [
+        kpi("Totaal", total),
+        kpi("Open", open, "text-red-600"),
+        kpi("In uitvoering", doing, "text-amber-700"),
+        kpi("Afgerond", done, "text-green-700"),
+        kpi("Overdue", overdue, "text-red-700"),
+      ].join("");
+    }
+    function isOverdue(a){
+      if(!a.deadline) return false;
+      if(a.status==="Afgerond") return false;
+      const d = new Date(a.deadline+"T00:00:00");
+      const t = new Date(); t.setHours(0,0,0,0);
+      return d < t;
+    }
+    function compare(a,b,key){
+      const dir = state.sort.dir === "asc" ? 1 : -1;
+      let va = a[key] ?? "", vb = b[key] ?? "";
+      if(key==="deadline"){ va = va||""; vb = vb||""; }
+      return (va > vb ? 1 : va < vb ? -1 : 0) * dir;
+    }
+    function applyFilters() {
+      let list = actions.slice();
+      const {q,status,owner,prio,from,to} = state;
+      if(q){
+        const s = q.toLowerCase();
+        list = list.filter(a =>
+          (a.title||"").toLowerCase().includes(s) ||
+          (a.desc||"").toLowerCase().includes(s) ||
+          (a.tags||[]).join(",").toLowerCase().includes(s)
+        );
+      }
+      if(status) list = list.filter(a => a.status===status);
+      if(owner)  list = list.filter(a => (a.resp||"").toLowerCase().includes(owner.toLowerCase()));
+      if(prio)   list = list.filter(a => a.priority===prio);
+      if(from)   list = list.filter(a => a.deadline && a.deadline >= from);
+      if(to)     list = list.filter(a => a.deadline && a.deadline <= to);
+      list.sort((a,b)=>compare(a,b,state.sort.key));
+      $("#filterInfo").textContent = `${list.length} resultaten`;
+      return list;
+    }
+    function renderTable(){
+      const list = applyFilters();
+      renderKPIs(list);
+      const rows = list.map(a => {
+        const overdue = isOverdue(a);
+        const dueStr = a.deadline ? fmtDate(a.deadline) : "—";
+        const tags = (a.tags||[]).map(t=>`<span class="rounded bg-slate-100 px-2 py-0.5 text-xs">${escapeHtml(t)}</span>`).join(" ");
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2"><input type="checkbox" data-id="${a.id}" ${state.selection.has(a.id)?"checked":""} aria-label="Selecteer rij"></td>
+            <td class="px-3 py-2">
+              <div class="font-medium">${escapeHtml(a.title||"")}</div>
+              <div class="text-xs text-slate-500 line-clamp-1">${escapeHtml(a.desc||"")}</div>
+            </td>
+            <td class="px-3 py-2">${escapeHtml(a.resp||"")}</td>
+            <td class="px-3 py-2">${badgeStatus(a.status)}</td>
+            <td class="px-3 py-2">${badgePrio(a.priority)}</td>
+            <td class="px-3 py-2 ${overdue?"text-red-700 font-semibold":""}">${dueStr}</td>
+            <td class="px-3 py-2">${tags}</td>
+            <td class="px-3 py-2">
+              <div class="flex gap-2">
+                <button class="rounded border px-2 py-1 text-xs hover:bg-slate-50" onclick='editAction("${a.id}")'>Bewerk</button>
+                <button class="rounded border px-2 py-1 text-xs text-red-700 hover:bg-red-50" onclick='removeAction("${a.id}")'>Verwijder</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      $("#tableBody").innerHTML = rows || `<tr><td colspan="8" class="px-3 py-6 text-center text-slate-500">Geen acties gevonden.</td></tr>`;
+      // bind row checkboxes
+      $$("#tableBody input[type=checkbox]").forEach(cb=>{
+        cb.addEventListener("change", (e)=>{
+          const id = e.target.getAttribute("data-id");
+          e.target.checked ? state.selection.add(id) : state.selection.delete(id);
+          $("#checkAll").checked = state.selection.size && state.selection.size === applyFilters().length;
+        });
+      });
+    }
+    function badgeStatus(s){
+      const map = {
+        "Open": "bg-red-100 text-red-700",
+        "In uitvoering": "bg-amber-100 text-amber-800",
+        "Afgerond": "bg-green-100 text-green-700"
+      };
+      const cls = map[s] || "bg-slate-100 text-slate-700";
+      return `<span class="rounded px-2 py-0.5 text-xs ${cls}">${s||"—"}</span>`;
+    }
+    function badgePrio(p){
+      const map = {
+        "Laag":"bg-slate-100 text-slate-700",
+        "Midden":"bg-blue-100 text-blue-700",
+        "Hoog":"bg-violet-100 text-violet-700",
+        "Kritiek":"bg-fuchsia-100 text-fuchsia-700"
+      };
+      const cls = map[p] || "bg-slate-100 text-slate-700";
+      return `<span class="rounded px-2 py-0.5 text-xs ${cls}">${p||"—"}</span>`;
+    }
+    function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+
+    // ------------------- CRUD -------------------
+    function openDialog(edit=null){
+      $("#actionDialog").showModal();
+      $("#dialogTitle").textContent = edit ? "Actie bewerken" : "Nieuwe actie";
+      $("#actionId").value = edit?.id || "";
+      $("#title").value = edit?.title || "";
+      $("#resp").value = edit?.resp || "";
+      $("#status").value = edit?.status || "Open";
+      $("#priority").value = edit?.priority || "Midden";
+      $("#deadline").value = edit?.deadline || "";
+      $("#tags").value = (edit?.tags||[]).join(", ");
+      $("#desc").value = edit?.desc || "";
+      setTimeout(()=>$("#title").focus(), 50);
+    }
+    function closeDialog(){ $("#actionDialog").close(); }
+    function editAction(id){
+      const a = actions.find(x=>x.id===id);
+      openDialog(a);
+    }
+    function removeAction(id){
+      if(!confirm("Verwijder deze actie?")) return;
+      actions = actions.filter(a => a.id !== id);
+      state.selection.delete(id);
+      save(); renderTable();
+    }
+
+    $("#actionForm").addEventListener("submit", (e)=>{
+      e.preventDefault();
+      const id = $("#actionId").value || uid();
+      const now = Date.now();
+      const obj = {
+        id,
+        title: $("#title").value.trim(),
+        resp: $("#resp").value.trim(),
+        status: $("#status").value,
+        priority: $("#priority").value,
+        deadline: $("#deadline").value || null,
+        tags: parseTags($("#tags").value),
+        desc: $("#desc").value.trim(),
+      };
+      if(!obj.title){ alert("Titel is verplicht."); return; }
+
+      const i = actions.findIndex(a=>a.id===id);
+      if(i>=0){
+        actions[i] = { ...actions[i], ...obj, updatedAt: now };
+      } else {
+        actions.unshift({ ...obj, createdAt: now, updatedAt: now });
+      }
+      save(); closeDialog(); renderTable();
+    });
+
+    // ------------------- BULK / EXPORT -------------------
+    $("#checkAll").addEventListener("change",(e)=>{
+      const rows = applyFilters();
+      state.selection = new Set(e.target.checked ? rows.map(r=>r.id) : []);
+      renderTable();
+      $("#checkAll").checked = e.target.checked;
+    });
+
+    $("#deleteSelectedBtn").addEventListener("click", ()=>{
+      if(!state.selection.size) return alert("Geen selectie.");
+      if(!confirm(`Verwijder ${state.selection.size} geselecteerde acties?`)) return;
+      actions = actions.filter(a=>!state.selection.has(a.id));
+      state.selection.clear();
+      save(); renderTable();
+    });
+
+    $("#copyBtn").addEventListener("click", ()=>{
+      const rows = applyFilters().filter(a=>state.selection.has(a.id));
+      if(!rows.length) return alert("Geen selectie om te kopiëren.");
+      const lines = [
+        ["Titel","Verantwoordelijke","Status","Prioriteit","Deadline","Tags","Beschrijving"].join("\t"),
+        ...rows.map(a=>[
+          a.title, a.resp||"", a.status||"", a.priority||"",
+          a.deadline?fmtDate(a.deadline):"", (a.tags||[]).join(", "),
+          (a.desc||"").replace(/\s+/g," ").trim()
+        ].join("\t"))
+      ].join("\n");
+      navigator.clipboard.writeText(lines).then(()=>alert("Gekopieerd naar klembord."));
+    });
+
+    $("#exportCsvBtn").addEventListener("click", ()=>{
+      const rows = applyFilters();
+      const csv = [
+        ["id","title","resp","status","priority","deadline","tags","desc","createdAt","updatedAt"].join(";"),
+        ...rows.map(a=>[
+          a.id, safe(a.title), safe(a.resp), a.status, a.priority, a.deadline||"",
+          (a.tags||[]).join(","), safe(a.desc), a.createdAt, a.updatedAt
+        ].join(";"))
+      ].join("\n");
+      download("actions.csv", csv, "text/csv;charset=utf-8;");
+    });
+    function safe(s){ return String(s||"").replaceAll(";","/"); }
+    function download(name, data, type){
+      const blob = new Blob([data], {type});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    $("#importCsvInput").addEventListener("change", (e)=>{
+      const file = e.target.files?.[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result.toString();
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const headers = lines.shift().split(/;|,|\t/).map(h=>h.trim());
+        const idx = (h) => headers.findIndex(x=>x.toLowerCase()===h.toLowerCase());
+        const out = [];
+        for(const line of lines){
+          const cols = line.split(/;|,|\t/);
+          const obj = {
+            id: cols[idx("id")] || uid(),
+            title: cols[idx("title")] || "(zonder titel)",
+            resp: cols[idx("resp")] || "",
+            status: cols[idx("status")] || "Open",
+            priority: cols[idx("priority")] || "Midden",
+            deadline: (cols[idx("deadline")]||"").slice(0,10) || null,
+            tags: (cols[idx("tags")]||"").split(",").map(s=>s.trim()).filter(Boolean),
+            desc: cols[idx("desc")] || "",
+            createdAt: Number(cols[idx("createdAt")] || Date.now()),
+            updatedAt: Number(cols[idx("updatedAt")] || Date.now()),
+          };
+          out.push(obj);
+        }
+        // merge by id
+        const map = new Map(actions.map(a=>[a.id,a]));
+        out.forEach(o=>map.set(o.id, {...map.get(o.id), ...o}));
+        actions = Array.from(map.values());
+        save(); renderTable();
+        alert(`Geïmporteerd: ${out.length} items.`);
+        $("#importCsvInput").value = "";
+      };
+      reader.readAsText(file);
+    });
+
+    $("#printBtn").addEventListener("click", ()=>window.print());
+
+    // ------------------- FILTER events -------------------
+    $("#newActionBtn").addEventListener("click", ()=>openDialog());
+    $("#freetext").addEventListener("input",(e)=>{ state.q=e.target.value; renderTable(); });
+    $("#statusFilter").addEventListener("change",(e)=>{ state.status=e.target.value; renderTable(); });
+    $("#ownerFilter").addEventListener("input",(e)=>{ state.owner=e.target.value; renderTable(); });
+    $("#prioFilter").addEventListener("change",(e)=>{ state.prio=e.target.value; renderTable(); });
+    $("#fromDate").addEventListener("change",(e)=>{ state.from=e.target.value; renderTable(); });
+    $("#toDate").addEventListener("change",(e)=>{ state.to=e.target.value; renderTable(); });
+    $("#clearFiltersBtn").addEventListener("click", ()=>{
+      $("#freetext").value=""; $("#statusFilter").value=""; $("#ownerFilter").value="";
+      $("#prioFilter").value=""; $("#fromDate").value=""; $("#toDate").value="";
+      state.q=state.status=state.owner=state.prio=state.from=state.to="";
+      renderTable();
+    });
+    // header sort
+    $$("th[data-sort]").forEach(th=>{
+      th.addEventListener("click", ()=>{
+        const key = th.getAttribute("data-sort");
+        state.sort = state.sort.key===key ? { key, dir: (state.sort.dir==="asc"?"desc":"asc") } : { key, dir:"asc" };
+        renderTable();
+      });
+    });
+
+    // ------------------- INIT -------------------
+    load(); renderTable();
+
+    // Deep-link vanuit team dashboard: ?resp=NAAM
+    const params = new URLSearchParams(location.search);
+    const respParam = params.get("resp");
+    if(respParam){ $("#ownerFilter").value = respParam; state.owner = respParam; renderTable(); }
+  </script>
+</body>
+</html>

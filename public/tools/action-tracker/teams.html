@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Team Dashboard — Action Tracker | Pure Excellence</title>
+  <link rel="icon" href="/favicon.ico"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body{font-family:Inter,system-ui,sans-serif}</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <a href="/" class="text-lg font-semibold">Pure <span class="text-blue-600">Excellence</span></a>
+      <nav class="flex items-center gap-2">
+        <a href="/tools/action-tracker/" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">← Acties</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    <section class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold">Team Dashboard</h1>
+        <p class="text-sm text-slate-600">Live overzicht per verantwoordelijke met open/in uitvoering/afgerond/overdue.</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="exportBtn" class="rounded-md border px-3 py-2 text-sm hover:bg-slate-50">⭳ Export CSV</button>
+      </div>
+    </section>
+
+    <section id="kpiWrap" class="grid grid-cols-2 gap-3 md:grid-cols-4"></section>
+
+    <section class="flex flex-wrap items-center gap-3">
+      <input id="search" class="w-64 rounded-md border px-3 py-2 text-sm" placeholder="Zoek verantwoordelijke…"/>
+      <select id="sortSel" class="w-56 rounded-md border px-3 py-2 text-sm">
+        <option value="openDesc">Sorteer: Open ↓</option>
+        <option value="totalDesc">Sorteer: Totaal ↓</option>
+        <option value="nameAsc">Sorteer: Naam ↑</option>
+      </select>
+    </section>
+
+    <div class="overflow-x-auto rounded-lg border bg-white shadow-sm">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-100 sticky top-0">
+          <tr>
+            <th class="px-4 py-2 text-left font-semibold">Verantwoordelijke</th>
+            <th class="px-4 py-2 text-right font-semibold">Open</th>
+            <th class="px-4 py-2 text-right font-semibold">In uitvoering</th>
+            <th class="px-4 py-2 text-right font-semibold">Afgerond</th>
+            <th class="px-4 py-2 text-right font-semibold">Overdue</th>
+            <th class="px-4 py-2 text-right font-semibold">Totaal</th>
+            <th class="px-4 py-2 text-right font-semibold">Acties</th>
+          </tr>
+        </thead>
+        <tbody id="teamTable" class="divide-y divide-slate-100 bg-white"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const actions = JSON.parse(localStorage.getItem("actions") || "[]");
+
+    const isOverdue = (a) => {
+      if (!a.deadline || a.status === "Afgerond") return false;
+      const d = new Date(a.deadline+"T00:00:00"); const t = new Date(); t.setHours(0,0,0,0);
+      return d < t;
+    };
+
+    function aggregateByResp(list) {
+      const map = new Map();
+      for (const a of list) {
+        const key = (a.resp || "(onbekend)").trim();
+        if (!map.has(key)) map.set(key, { name:key, open:0, doing:0, done:0, overdue:0, total:0 });
+        const r = map.get(key);
+        r.total++;
+        if (a.status === "Afgerond") r.done++;
+        else if (a.status === "In uitvoering") r.doing++;
+        else r.open++;
+        if (isOverdue(a)) r.overdue++;
+      }
+      return Array.from(map.values());
+    }
+
+    function renderKPIs(list) {
+      const tot = list.length;
+      const open = list.filter(a => a.status !== "Afgerond").length;
+      const done = list.filter(a => a.status === "Afgerond").length;
+      const od = list.filter(isOverdue).length;
+
+      const k = (lbl,val,tint="text-slate-900") => `
+        <div class="rounded-lg border bg-white p-4">
+          <div class="text-xs uppercase tracking-wide text-slate-500">${lbl}</div>
+          <div class="mt-1 text-2xl font-bold ${tint}">${val}</div>
+        </div>`;
+      document.getElementById("kpiWrap").innerHTML = [
+        k("Totaal acties", tot),
+        k("Open", open, "text-red-700"),
+        k("In uitvoering", list.filter(a=>a.status==='In uitvoering').length, "text-amber-700"),
+        k("Afgerond", done, "text-green-700"),
+      ].join("");
+    }
+
+    function renderTable() {
+      const q = document.getElementById("search").value.toLowerCase();
+      const sort = document.getElementById("sortSel").value;
+
+      let rows = aggregateByResp(actions).filter(r => r.name.toLowerCase().includes(q));
+      if (sort === "openDesc") rows.sort((a,b)=>b.open-a.open || a.name.localeCompare(b.name));
+      else if (sort === "totalDesc") rows.sort((a,b)=>b.total-a.total || a.name.localeCompare(b.name));
+      else rows.sort((a,b)=>a.name.localeCompare(b.name));
+
+      document.getElementById("teamTable").innerHTML = rows.map(r => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">${r.name}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${r.open}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${r.doing}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${r.done}</td>
+          <td class="px-4 py-2 text-right tabular-nums ${r.overdue? 'text-red-700 font-semibold':''}">${r.overdue}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${r.total}</td>
+          <td class="px-4 py-2 text-right">
+            <a href="/tools/action-tracker/?resp=${encodeURIComponent(r.name)}" class="text-blue-600 hover:underline">Bekijk acties →</a>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function exportCSV() {
+      const rows = aggregateByResp(actions);
+      const csv = [
+        ["Verantwoordelijke","Open","In uitvoering","Afgerond","Overdue","Totaal"].join(";"),
+        ...rows.map(r=>[r.name,r.open,r.doing,r.done,r.overdue,r.total].join(";"))
+      ].join("\n");
+      const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "team-dashboard.csv"; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("search").addEventListener("input", renderTable);
+    document.getElementById("sortSel").addEventListener("change", renderTable);
+    document.getElementById("exportBtn").addEventListener("click", exportCSV);
+
+    renderKPIs(actions);
+    renderTable();
+  </script>
+</body>
+</html>
